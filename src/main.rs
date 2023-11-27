@@ -1,3 +1,4 @@
+use aes::cipher::typenum::bit;
 use aes::cipher::{generic_array::GenericArray, BlockEncrypt, KeyInit};
 use aes::Aes128;
 use hex::FromHex;
@@ -75,6 +76,71 @@ fn cbc_aes128(m: String, k: String) -> String {
             padded_message[i * 32..i * 32 + 32].to_string(),
         );
         let mut block_xor_bytes = GenericArray::from(<[u8; 16]>::from_hex(block_xor).unwrap());
+        cipher.encrypt_block(&mut block_xor_bytes);
+        c.push(hex::encode(block_xor_bytes.to_vec()));
+    }
+
+    c.iter().fold("".to_string(), |acc, x| format!("{acc}{x}"))
+}
+
+// adds 1 to the IV
+fn add_one_iv(iv: String) -> String {
+    let mut bits = iv
+        .chars()
+        .map(|i| if i == '1' { 1 } else { 0 })
+        .collect::<Vec<u8>>();
+
+    let n = bits.len();
+    bits[n - 1] += 1;
+    let mut carry = if bits[n - 1] > 1 { 1 } else { 0 };
+    for i in (0..n - 1).rev() {
+        bits[i] += carry;
+        carry = if bits[i] > 1 { 1 } else { 0 };
+        bits[i] %= 2;
+    }
+
+    bits.iter()
+        .map(|i| if *i == 1 { '1' } else { '0' })
+        .collect::<String>()
+}
+
+/// CTR mode with AES128
+fn ctr_aes128(m: String, k: String) -> String {
+    assert_eq!(k.len(), 32, "the lentgh of the key must be 32");
+    assert_eq!(m.len() % 2, 0, "the message length is not even");
+
+    // padding PKCS5
+    let padded_message = pkcs5(m);
+
+    // initialize cipher
+    let key = GenericArray::from(<[u8; 16]>::from_hex(k).unwrap());
+    let cipher = Aes128::new(&key);
+
+    // generate random IV of bits
+    let mut rng = rand::thread_rng();
+    let random_bytes = vec![0; 16]
+        .iter()
+        .map(|_| rng.gen::<bool>())
+        .collect::<Vec<bool>>();
+    let random_iv = random_bytes.iter().fold("".to_string(), |acc, n| {
+        format!("{acc}{}", hex::encode(vec![if *n { 1 } else { 0 }]))
+    });
+
+    // string for the ciphertext
+    let mut c = Vec::<String>::new();
+
+    // push the IV as the first element in the ciphertext
+    c.push(random_iv.clone());
+
+    // encrypt each block
+    for i in 0..padded_message.len() / 32 {
+        let block_xor = xor_16bytes_hex(
+            c[c.len() - 1].clone(),
+            padded_message[i * 32..i * 32 + 32].to_string(),
+        );
+        let mut block_xor_bytes = GenericArray::from(
+            <[u8; 16]>::from_hex(padded_message[i * 32..i * 32 + 32].to_string()).unwrap(),
+        );
         cipher.encrypt_block(&mut block_xor_bytes);
         c.push(hex::encode(block_xor_bytes.to_vec()));
     }
