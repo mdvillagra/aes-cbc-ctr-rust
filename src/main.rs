@@ -1,4 +1,4 @@
-use aes::cipher::typenum::bit;
+use aes::cipher::typenum::U16;
 use aes::cipher::{generic_array::GenericArray, BlockEncrypt, KeyInit};
 use aes::Aes128;
 use hex::FromHex;
@@ -134,6 +134,11 @@ fn ctr_aes128(m: String, k: String) -> String {
 
     // encrypt each block
     for i in 0..padded_message.len() / 32 {
+        let next_iv = random_iv
+            .chars()
+            .map(|i| if i == '1' { 1 } else { 0 })
+            .collect::<Vec<u8>>();
+        let a: GenericArray<u8, U16> = GenericArray::clone_from_slice(&next_iv);
         let block_xor = xor_16bytes_hex(
             c[c.len() - 1].clone(),
             padded_message[i * 32..i * 32 + 32].to_string(),
