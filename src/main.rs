@@ -43,6 +43,9 @@ fn xor_16bytes_hex(a: String, b: String) -> String {
         format!("{acc}{}", hex::encode(vec![*n]))
     })
 }
+
+
+#[allow(dead_code)]
 /// CBC mode with AES128
 fn cbc_aes128_encrypt(m: String, k: String) -> String {
     assert_eq!(k.len(), 32, "the lentgh of the key must be 32");
@@ -104,6 +107,7 @@ fn add_one_iv(iv: String) -> String {
         .collect::<String>()
 }
 
+#[allow(dead_code)]
 /// CTR mode with AES128
 fn ctr_aes128(m: String, k: String) -> String {
     assert_eq!(k.len(), 32, "the lentgh of the key must be 32");
@@ -122,9 +126,10 @@ fn ctr_aes128(m: String, k: String) -> String {
         .iter()
         .map(|_| rng.gen::<bool>())
         .collect::<Vec<bool>>();
-    let random_iv = random_bytes.iter().fold("".to_string(), |acc, n| {
-        format!("{acc}{}", hex::encode(vec![if *n { 1 } else { 0 }]))
-    });
+    let mut random_iv = random_bytes
+        .iter()
+        .map(|i| if *i { '1' } else { '0' })
+        .collect::<String>();
 
     // string for the ciphertext
     let mut c = Vec::<String>::new();
@@ -138,16 +143,14 @@ fn ctr_aes128(m: String, k: String) -> String {
             .chars()
             .map(|i| if i == '1' { 1 } else { 0 })
             .collect::<Vec<u8>>();
-        let a: GenericArray<u8, U16> = GenericArray::clone_from_slice(&next_iv);
+        let mut iv_plus_1: GenericArray<u8, U16> = GenericArray::clone_from_slice(&next_iv);
+        cipher.encrypt_block(&mut iv_plus_1);
         let block_xor = xor_16bytes_hex(
-            c[c.len() - 1].clone(),
+            hex::encode(iv_plus_1.to_vec()),
             padded_message[i * 32..i * 32 + 32].to_string(),
         );
-        let mut block_xor_bytes = GenericArray::from(
-            <[u8; 16]>::from_hex(padded_message[i * 32..i * 32 + 32].to_string()).unwrap(),
-        );
-        cipher.encrypt_block(&mut block_xor_bytes);
-        c.push(hex::encode(block_xor_bytes.to_vec()));
+        c.push(block_xor);
+        random_iv = add_one_iv(random_iv);
     }
 
     c.iter().fold("".to_string(), |acc, x| format!("{acc}{x}"))
@@ -157,5 +160,5 @@ fn main() {
     let c1 = String::from("4ca00ff4c898d61e1edbf1800618fb2828a226d160dad07883d04e008a7897ee2e4b7465d5290d0c0e6c6822236e1daafb94ffe0c5da05d9476be028ad7c1d81");
     let key1 = String::from("140b41b22a29beb4061bda66b6747e14");
 
-    println!("{}", cbc_aes128_encrypt(c1, key1));
+    println!("{}", ctr_aes128(c1, key1));
 }
