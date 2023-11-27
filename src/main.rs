@@ -35,9 +35,8 @@ fn xor_16bytes_hex(a: String, b: String) -> String {
         .map(|u| hex::encode(u.to_string()))
         .fold("".to_string(), |acc, n| format!("{acc}{n}"))
 }
-
-fn cbc_aes128(iv: String, m: String, k: String) -> String {
-    assert_eq!(iv.len(), 32, "the lentgh of the IV must be 32");
+/// CBC mode with AES128
+fn cbc_aes128(m: String, k: String) -> String {
     assert_eq!(k.len(), 32, "the lentgh of the key must be 32");
     assert_eq!(m.len() % 2, 0, "the message length is not even");
 
@@ -63,9 +62,15 @@ fn cbc_aes128(iv: String, m: String, k: String) -> String {
     // push the IV as the first element in the ciphertext
     c.push(random_iv.clone());
 
-    let block_xor = xor_16bytes_hex(random_iv, padded_message[0..32].to_string());
-    let mut block_xor_bytes = GenericArray::from(<[u8; 16]>::from_hex(block_xor).unwrap());
-    cipher.encrypt_block(&mut block_xor_bytes);
+    for i in 0..padded_message.len() / 32 {
+        let block_xor = xor_16bytes_hex(
+            c[c.len() - 1].clone(),
+            padded_message[i * 32..i * 32 + 32].to_string(),
+        );
+        let mut block_xor_bytes = GenericArray::from(<[u8; 16]>::from_hex(block_xor).unwrap());
+        cipher.encrypt_block(&mut block_xor_bytes);
+        c.push(hex::encode(block_xor_bytes.to_vec()));
+    }
 
     c.iter().fold("".to_string(), |acc, x| format!("{acc}{x}"))
 }
